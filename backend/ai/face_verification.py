@@ -1,38 +1,63 @@
-import os
+import numpy as np
 from deepface import DeepFace
+from sqlalchemy import text
 
 class FaceVerifier:
-    def __init__(self, reference_folder="uploaded_faces"):
-        # We go up one level from the 'ai' folder to find 'uploaded_faces'
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.reference_folder = os.path.join(base_dir, reference_folder)
-        
-        if not os.path.exists(self.reference_folder):
-            os.makedirs(self.reference_folder)
 
-    def verify(self, live_image_path: str, user_id: str):
-        # Ensure path uses the user_id correctly
-        reference_path = os.path.join(self.reference_folder, f"{user_id}.jpg")
-
-        if not os.path.exists(reference_path):
-            return {"error": f"Reference photo not found at {reference_path}"}
-
+    # -----------------------------
+    # 🔥 GET EMBEDDING
+    # -----------------------------
+    def get_embedding(self, img_path):
         try:
-            # DeepFace.verify handles the heavy lifting
-            result = DeepFace.verify(
-                img1_path = live_image_path,
-                img2_path = reference_path,
-                model_name = "VGG-Face",
-                distance_metric = "cosine",
-                enforce_detection = True,
-                detector_backend = "opencv" # Options: 'opencv', 'retinaface', 'mtcnn'
+            embedding = DeepFace.represent(
+                img_path=img_path,
+                model_name="VGG-Face",
+                enforce_detection=False
             )
 
-            return {
-                "verified": bool(result["verified"]),
-                "confidence": round(1 - result["distance"], 4),
-                "status": "Match" if result["verified"] else "Mismatch"
-            }
+            return np.array(embedding[0]["embedding"])
+
         except Exception as e:
-            # If no face is detected, DeepFace throws an exception
-            return {"error": f"AI Processing Error: {str(e)}"}
+            raise Exception(f"Embedding failed: {str(e)}")
+
+    # -----------------------------
+    # 🔥 COSINE SIMILARITY
+    # -----------------------------
+    def cosine_similarity(self, a, b):
+        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+    # -----------------------------
+    # 🔥 NEW VERIFY (DB BASED)
+    # -----------------------------
+    def verify(self, live_image_path: str, user_id: str, db):
+        try:
+            # 1️⃣ Get stored embedding from DB
+            result = db.execute(
+                text("SELECT embedding FROM face_embeddings WHERE user_id = :uid"),
+                {"uid": user_id}
+            ).fetchone()
+
+            if not result:
+                return {"error": "No stored face found for this user"}
+
+            stored_embedding = np.array(result[0])
+
+            # 2️⃣ Get live embedding
+            live_embedding = self.get_embedding(live_image_path)
+
+            # 3️⃣ Compare
+            similarity = self.cosine_similarity(stored_embedding, live_embedding)
+
+            # 🔥 threshold (tune this)
+            threshold = 0.6
+
+            verified = similarity > threshold
+
+            return {
+                "verified": verified,
+                "confidence": round(float(similarity), 4),
+                "status": "Match" if verified else "Mismatch"
+            }
+
+        except Exception as e:
+            return {"error": str(e)}

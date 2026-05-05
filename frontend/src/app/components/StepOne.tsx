@@ -1,4 +1,5 @@
 import { User } from 'lucide-react';
+import { useState } from 'react';
 
 interface StepOneProps {
   formData: {
@@ -7,74 +8,106 @@ interface StepOneProps {
     idNumber: string;
   };
   onChange: (field: string, value: string) => void;
-  onNext: () => void;
+  onNext: (userId: string) => void;
 }
 
 export function StepOne({ formData, onChange, onNext }: StepOneProps) {
-  const handleSubmit = (e: React.FormEvent) => {
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.fullName && formData.dateOfBirth && formData.idNumber) {
-      onNext();
+    setError('');
+
+    if (!formData.fullName || !formData.dateOfBirth || !formData.idNumber) {
+      setError('Please fill in all fields.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const params = new URLSearchParams();
+      params.append('name', formData.fullName);
+      params.append('id_number', formData.idNumber);
+      params.append('dob', formData.dateOfBirth);
+
+      const res = await fetch("http://127.0.0.1:8000/add-user", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Server error');
+      }
+
+      const data = await res.json();
+      console.log('✅ USER CREATED:', data);
+
+      onNext(data.user_id); // ⭐ THIS IS id_number
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to connect');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+
       <div className="flex items-center justify-center mb-6">
         <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
           <User className="w-8 h-8 text-[#3b82f6]" />
         </div>
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">
+          {error}
+        </div>
+      )}
+
       <div>
-        <label htmlFor="fullName" className="block text-sm mb-2 text-gray-700">
-          Full Name
-        </label>
+        <label className="block text-sm mb-2">Full Name</label>
         <input
-          id="fullName"
           type="text"
           value={formData.fullName}
           onChange={(e) => onChange('fullName', e.target.value)}
-          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition-all"
-          placeholder="Enter your full name"
-          required
+          className="w-full px-4 py-3 border rounded-xl"
         />
       </div>
 
       <div>
-        <label htmlFor="dateOfBirth" className="block text-sm mb-2 text-gray-700">
-          Date of Birth
-        </label>
+        <label className="block text-sm mb-2">Date of Birth</label>
         <input
-          id="dateOfBirth"
           type="date"
           value={formData.dateOfBirth}
           onChange={(e) => onChange('dateOfBirth', e.target.value)}
-          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition-all"
-          required
+          className="w-full px-4 py-3 border rounded-xl"
         />
       </div>
 
       <div>
-        <label htmlFor="idNumber" className="block text-sm mb-2 text-gray-700">
-          ID Number
-        </label>
+        <label className="block text-sm mb-2">ID Number</label>
         <input
-          id="idNumber"
           type="text"
           value={formData.idNumber}
           onChange={(e) => onChange('idNumber', e.target.value)}
-          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition-all"
-          placeholder="Enter your ID number"
-          required
+          className="w-full px-4 py-3 border rounded-xl"
         />
       </div>
 
       <button
         type="submit"
-        className="w-full bg-[#3b82f6] text-white py-3 rounded-xl hover:bg-blue-600 transition-all"
+        disabled={loading}
+        className="w-full bg-[#3b82f6] text-white py-3 rounded-xl"
       >
-        Continue
+        {loading ? 'Saving...' : 'Continue'}
       </button>
     </form>
   );

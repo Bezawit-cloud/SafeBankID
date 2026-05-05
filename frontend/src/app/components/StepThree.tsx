@@ -1,89 +1,193 @@
 import { Camera, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 interface StepThreeProps {
   onNext: () => void;
   onBack: () => void;
   onFail: () => void;
+  userId: string | null;
 }
 
-export function StepThree({ onNext, onBack, onFail }: StepThreeProps) {
+export function StepThree({ onNext, onBack, onFail, userId }: StepThreeProps) {
   const [isVerifying, setIsVerifying] = useState(false);
-  const [status, setStatus] = useState('Waiting for face detection...');
+  const [status, setStatus] = useState('Camera starting...');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [debug, setDebug] = useState<any>(null);
 
-  const startVerification = () => {
-    setIsVerifying(true);
-    setStatus('Analyzing face...');
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-    // Simulate verification process with 80% success rate
-    setTimeout(() => {
-      const isSuccess = Math.random() > 0.2;
-      if (isSuccess) {
-        setStatus('Verification successful!');
-        setTimeout(() => onNext(), 500);
-      } else {
-        setStatus('Verification failed');
-        setTimeout(() => onFail(), 500);
+  useEffect(() => {
+    const startCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        streamRef.current = stream;
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current?.play();
+            setCameraReady(true);
+            setStatus('Camera ready. Click Start Verification.');
+          };
+        }
+      } catch (err) {
+        console.error('Camera error:', err);
+        setStatus('Camera access denied. Please allow camera.');
       }
-    }, 3000);
+    };
+
+    startCamera();
+
+    return () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const startVerification = async () => {
+    if (!userId) {
+      alert('User ID missing');
+      return;
+    }
+
+    if (!cameraReady || !videoRef.current) {
+      alert('Camera not ready');
+      return;
+    }
+
+    setIsVerifying(true);
+    setStatus('Capturing face...');
+    setDebug(null);
+
+    try {
+      const video = videoRef.current;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0);
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg')
+      );
+
+      if (!blob) {
+        setStatus('Failed to capture image');
+        setIsVerifying(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', blob, 'face.jpg');
+
+      setStatus('Verifying identity...');
+
+      const response = await fetch(`http://127.0.0.1:8000/verify-secure/${userId}`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      console.log('🔥 FULL BACKEND:', data);
+
+      setDebug(data);
+
+      // ✅ SUCCESS
+      if (data.access === 'GRANTED') {
+        setStatus('✅ Verification successful');
+        setTimeout(() => onNext(), 800);
+        return;
+      }
+
+      // ❌ SPECIFIC ERRORS
+      if (data.error) {
+        setStatus(`❌ ${data.error}`);
+      } else if (data.confidence !== undefined && data.liveness_score !== undefined) {
+        setStatus(
+          `❌ Face mismatch (conf: ${data.confidence.toFixed(2)}, live: ${data.liveness_score.toFixed(2)})`
+        );
+      } else {
+        setStatus('❌ Verification failed');
+      }
+
+      setTimeout(() => onFail(), 1500);
+
+    } catch (err) {
+      console.error(err);
+      setStatus('Server connection error');
+      setTimeout(() => onFail(), 1000);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-center mb-6">
-        <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
-          <Camera className="w-8 h-8 text-[#3b82f6]" />
-        </div>
-      </div>
 
-      <div className="relative bg-gray-900 rounded-xl overflow-hidden aspect-[4/3] flex items-center justify-center">
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900"></div>
-        <div className="relative z-10 text-center">
-          <div className="w-48 h-48 border-4 border-dashed border-white/30 rounded-full mx-auto mb-4 flex items-center justify-center">
-            <Camera className="w-20 h-20 text-white/40" />
+      {/* CAMERA */}
+      <div className="relative bg-gray-900 rounded-xl overflow-hidden aspect-[4/3]">
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="w-full h-full object-cover"
+        />
+
+        {!cameraReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+            <div className="text-center text-white">
+              <Camera className="w-16 h-16 mx-auto opacity-50" />
+              <p className="mt-2 text-sm">{status}</p>
+            </div>
           </div>
-          <p className="text-white text-lg mb-2">Position your face in the frame</p>
-          <div className="flex items-center justify-center space-x-2">
-            {isVerifying && <Loader2 className="w-4 h-4 text-white animate-spin" />}
-            <p className="text-white/70 text-sm">{status}</p>
+        )}
+
+        {cameraReady && (
+          <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-sm text-center py-2">
+            {status}
           </div>
+        )}
+      </div>
+
+      {/* DEBUG PANEL 🔥 */}
+      {debug && (
+        <div className="text-xs bg-gray-100 p-3 rounded-xl">
+          <p><b>Access:</b> {debug.access}</p>
+          <p><b>Confidence:</b> {debug.confidence}</p>
+          <p><b>Liveness:</b> {debug.liveness_score}</p>
+          <p><b>Error:</b> {debug.error}</p>
         </div>
-      </div>
+      )}
 
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <p className="text-sm text-blue-900">
-          <strong>Tips for best results:</strong>
-        </p>
-        <ul className="text-sm text-blue-800 mt-2 space-y-1">
-          <li>• Ensure good lighting on your face</li>
-          <li>• Remove glasses or hats</li>
-          <li>• Look directly at the camera</li>
-        </ul>
-      </div>
-
+      {/* BUTTONS */}
       <div className="flex gap-3">
         <button
           onClick={onBack}
           disabled={isVerifying}
-          className="flex-1 border border-gray-300 text-gray-700 py-3 rounded-xl hover:bg-gray-50 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+          className="flex-1 border py-3 rounded-xl"
         >
           Back
         </button>
+
         <button
           onClick={startVerification}
-          disabled={isVerifying}
-          className="flex-1 bg-[#3b82f6] text-white py-3 rounded-xl hover:bg-blue-600 transition-all disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+          disabled={!cameraReady || isVerifying}
+          className="flex-1 bg-[#3b82f6] text-white py-3 rounded-xl flex items-center justify-center gap-2 disabled:bg-gray-300"
         >
           {isVerifying ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Verifying...</span>
+              Verifying...
             </>
           ) : (
-            <span>Start Verification</span>
+            'Start Verification'
           )}
         </button>
       </div>
+
     </div>
   );
 }
