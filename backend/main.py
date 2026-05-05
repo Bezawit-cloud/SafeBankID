@@ -6,106 +6,219 @@ import shutil
 import os
 import cv2
 import numpy as np
+import ast
 
-# Internal Imports
+from deepface import DeepFace
+
 from database import get_db
-from ai.face_verification import FaceVerifier
 from ai.liveness import LivenessDetector
-from ai.ocr_utils import verify_ocr  # Updated to the advanced logic
+from ai.ocr_utils import verify_ocr
 
 app = FastAPI(title="SafeBankID - Secure Identity System")
 
-# Enable CORS for Frontend
+# ----------------------------
+# CORS
+# ----------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize AI Tools
-verifier = FaceVerifier()
 liveness_detector = LivenessDetector()
 
+
+# ----------------------------
+# HEALTH CHECK
+# ----------------------------
 @app.get("/")
-def check_status():
-    return {"status": "SafeBankID System Online"}
+def health():
+    return {"status": "SafeBankID Online"}
 
-# --- USER MANAGEMENT ---
 
+# ----------------------------
+# STEP 1 - ADD USER
+# ----------------------------
 @app.post("/add-user")
-def add_user(name: str, email: str, dob: str, db: Session = Depends(get_db)):
-    query = text("INSERT INTO users (name, email, dob) VALUES (:n, :e, :d)")
-    db.execute(query, {"n": name, "e": email, "d": dob})
-    db.commit()
-    return {"message": f"Successfully added {name} to SafeBankID"}
-
-# --- BIOMETRIC CHECK (Face + Liveness) ---
-
-@app.post("/verify-secure/{user_id}")
-async def verify_secure(user_id: str, file: UploadFile = File(...)):
-    temp_path = f"temp_{user_id}_{file.filename}"
+def add_user(
+    name: str = Form(...),
+    id_number: str = Form(...),
+    dob: str = Form(...),
+    db: Session = Depends(get_db)
+):
     try:
-        with open(temp_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        db.execute(text("""
+            INSERT INTO users (name, id_number, dob)
+            VALUES (:n, :id, :d)
+            ON CONFLICT (id_number)
+            DO UPDATE SET name=:n, dob=:d
+        """), {"n": name, "id": id_number, "d": dob})
 
-        identity = verifier.verify(temp_path, user_id)
-        liveness = liveness_detector.check_liveness(temp_path)
+        db.commit()
 
-        is_verified = identity.get("verified", False)
-        is_alive = liveness.get("is_alive", False)
-
-        if is_verified and is_alive:
-            return {
-                "access": "GRANTED",
-                "user_id": user_id,
-                "confidence": identity["confidence"],
-                "liveness_score": liveness["liveness_score"]
-            }
-        
         return {
-            "access": "DENIED",
-            "reason": "Identity Match Failure" if not is_verified else "Spoofing Detected",
-            "details": {"identity": is_verified, "liveness": is_alive}
+            "success": True,
+            "user_id": id_number
         }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ----------------------------
+# STEP 2 - OCR + STORE FACE EMBEDDING
+# ----------------------------
+@app.post("/verify-id")
+async def verify_id(
+    full_name: str = Form(...),
+    id_number: str = Form(...),
+    dob: str = Form(...),
+    gender: str = Form(...),
+    expiry_date: str = Form(...),
+    id_file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        contents = await id_file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if img is None:
+            raise HTTPException(status_code=400, detail="Invalid image")
+
+        # OCR
+        user_data = {
+            "full_name": full_name,
+            "id_number": id_number,
+            "dob": dob,
+            "gender": gender,
+            "expiry_date": expiry_date
+        }
+
+        report = verify_ocr(img, user_data)
+
+        if report["status"] != "verified":
+            return {
+                "success": False,
+                "step": "ocr_failed",
+                "ocr_result": report
+            }
+
+        # Save temp image
+        temp_path = f"temp_{id_number}.jpg"
+        cv2.imwrite(temp_path, img)
+
+        # Face embedding
+        embedding = DeepFace.represent(
+            img_path=temp_path,
+            model_name="VGG-Face",
+            enforce_detection=True
+        )[0]["embedding"]
+
+        os.remove(temp_path)
+
+        # Store embedding
+        db.execute(text("""
+            INSERT INTO face_embeddings (user_id, embedding)
+            VALUES (:uid, :emb)
+            ON CONFLICT (user_id)
+            DO UPDATE SET embedding=:emb
+        """), {
+            "uid": id_number,
+            "emb": embedding
+        })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "step": "id_verified",
+            "ocr_result": report
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+# ----------------------------
+# STEP 3 - LIVE FACE VERIFY
+# ----------------------------
+@app.post("/verify-secure/{user_id}")
+async def verify_secure(
+    user_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    temp_path = f"live_{user_id}.jpg"
+
+    try:
+        with open(temp_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        # ---------------- LOAD EMBEDDING ----------------
+        row = db.execute(text("""
+            SELECT embedding FROM face_embeddings WHERE user_id=:uid
+        """), {"uid": user_id}).fetchone()
+
+        if not row:
+            return {
+                "success": False,
+                "access": "DENIED",
+                "reason": "No stored face found"
+            }
+
+        # FIX: safer conversion
+        stored_embedding = np.array(row[0], dtype=np.float32)
+
+        # ---------------- LIVE EMBEDDING ----------------
+        live_embedding = DeepFace.represent(
+            img_path=temp_path,
+            model_name="VGG-Face",
+            enforce_detection=True
+        )[0]["embedding"]
+
+        live_embedding = np.array(live_embedding, dtype=np.float32)
+
+        # ---------------- SIMILARITY ----------------
+        similarity = float(
+            np.dot(live_embedding, stored_embedding) /
+            (np.linalg.norm(live_embedding) * np.linalg.norm(stored_embedding))
+        )
+
+        # ✅ FIX 1: lower threshold
+        face_match = bool(similarity > 0.50)
+
+        # ---------------- LIVENESS ----------------
+        liveness = liveness_detector.check_liveness(temp_path)
+        is_alive = bool(liveness.get("is_alive", False))
+        liveness_score = float(liveness.get("liveness_score", 0))
+
+        # ✅ FIX 2: smarter decision (IMPORTANT)
+        final_score = (similarity * 0.7) + (liveness_score * 0.3)
+        final = final_score > 0.60
+
+        return {
+            "success": True,
+            "access": "GRANTED" if final else "DENIED",
+            "confidence": similarity,
+            "liveness_score": liveness_score,
+            "final_score": final_score,
+            "face_match": face_match,
+            "is_alive": is_alive
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
-
-# --- ID CARD CHECK (Advanced OCR) ---
-
-@app.post("/verify-id")
-async def verify_id(
-    full_name: str = Form(...), 
-    id_number: str = Form(...),
-    dob: str = Form(...),            # Added to match advanced logic
-    gender: str = Form(...),         # Added to match advanced logic
-    expiry_date: str = Form(...),    # Added to match advanced logic
-    id_file: UploadFile = File(...)
-):
-    # 1. Convert upload to OpenCV format
-    contents = await id_file.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-    if img is None:
-        raise HTTPException(status_code=400, detail="Invalid image file")
-
-    # 2. Bundle User Data for Comparison
-    user_data = {
-        "full_name": full_name,
-        "id_number": id_number,
-        "dob": dob,
-        "gender": gender,
-        "expiry_date": expiry_date
-    }
-
-    # 3. Run the Advanced OCR Verification Logic
-    # This calls the verify_ocr function from your ocr_utils.py
-    report = verify_ocr(img, user_data)
-    
-    return report
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
