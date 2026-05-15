@@ -1,15 +1,26 @@
-
 import os
-DATABASE_URL = os.getenv("DATABASE_URL")
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
 
-# Format: postgresql://username:password@localhost:port/dbname
-# Change 'yourpassword' to what you chose during installation!
-DATABASE_URL = "postgresql://postgres:1234@localhost:5432/Safebank_id"
+load_dotenv()
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL is not set. Check .env or Docker env_file.")
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    connect_args={"sslmode": "require"}
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
 
 def get_db():
     db = SessionLocal()

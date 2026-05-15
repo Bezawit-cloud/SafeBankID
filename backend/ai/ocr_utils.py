@@ -5,7 +5,9 @@ import pytesseract
 from rapidfuzz import fuzz
 
 # -------- CONFIGURATION --------
-TESSERACT_CMD = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# TESSERACT_CMD = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+TESSERACT_CMD = "/usr/bin/tesseract"
 pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
 
 

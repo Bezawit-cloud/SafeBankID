@@ -7,6 +7,7 @@ import os
 import cv2
 import numpy as np
 import ast
+import json
 
 from deepface import DeepFace
 
@@ -99,6 +100,7 @@ async def verify_id(
         }
 
         report = verify_ocr(img, user_data)
+        print("OCR REPORT:", report) 
 
         if report["status"] != "verified":
             return {
@@ -121,15 +123,17 @@ async def verify_id(
         os.remove(temp_path)
 
         # Store embedding
+        embedding_json = json.dumps(embedding)
         db.execute(text("""
             INSERT INTO face_embeddings (user_id, embedding)
-            VALUES (:uid, :emb)
+            VALUES (:uid, cast(:emb as jsonb))
             ON CONFLICT (user_id)
-            DO UPDATE SET embedding=:emb
+            DO UPDATE SET embedding=cast(:emb as jsonb)
         """), {
             "uid": id_number,
-            "emb": embedding
+            "emb": embedding_json
         })
+      
 
         db.commit()
 
