@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv
+venv/
+*.egg-info/
+.git/
+.gitignore
+uploaded_faces/
+*.jpg
+*.png
+temp_*
+live_*
