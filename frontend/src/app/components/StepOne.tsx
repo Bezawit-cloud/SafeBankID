@@ -32,7 +32,7 @@ export function StepOne({ formData, onChange, onNext }: StepOneProps) {
       params.append('id_number', formData.idNumber);
       params.append('dob', formData.dateOfBirth);
 
-      const res = await fetch("http://127.0.0.1:8000/add-user", {
+      const res = await fetch("https://safebankid.onrender.com/add-user", {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',

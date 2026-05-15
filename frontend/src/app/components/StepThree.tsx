@@ -84,7 +84,7 @@ export function StepThree({ onNext, onBack, onFail, userId }: StepThreeProps) {
 
       setStatus('Verifying identity...');
 
-      const response = await fetch(`http://127.0.0.1:8000/verify-secure/${userId}`, {
+      const response = await fetch(`https://safebankid.onrender.com/verify-secure/${userId}`, {
         method: 'POST',
         body: formData,
       });
