@@ -32,7 +32,7 @@ export function StepOne({ formData, onChange, onNext }: StepOneProps) {
       params.append('id_number', formData.idNumber);
       params.append('dob', formData.dateOfBirth);
 
-      const res = await fetch("https://safebankid.onrender.com/add-user", {
+      const res = await fetch("https://bezawit-ai-safebank-id.hf.space/add-user", {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
