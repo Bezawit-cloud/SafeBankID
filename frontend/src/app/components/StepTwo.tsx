@@ -56,7 +56,7 @@ export function StepTwo({ userFormData, onNext, onBack }: StepTwoProps) {
       formData.append('gender', 'unknown');
       formData.append('expiry_date', '2030-01-01');
 
-      const response = await fetch("https://safebankid.onrender.com/verify-id", {
+      const response = await fetch("https://bezawit-ai-safebank-id.hf.space/verify-id", {
         method: 'POST',
         body: formData,
       });
