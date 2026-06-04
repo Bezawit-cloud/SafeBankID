@@ -1,134 +1,151 @@
-#  SafeBankID: AI-Powered Identity Verification
+#  SafeBankID
+
+### Secure AI-Powered Identity Verification System
+
+
+
+SafeBankID is a full-stack AI-powered identity verification platform designed to automate and secure digital customer onboarding. The system combines Optical Character Recognition (OCR), facial recognition, and liveness detection to verify user identities while reducing fraud and manual verification efforts.
+
+Built using React, FastAPI, PostgreSQL, DeepFace, and OpenCV, SafeBankID demonstrates how modern Artificial Intelligence and Computer Vision technologies can be integrated into real-world financial technology applications. The platform enables users to submit identification documents, complete biometric verification, and receive instant verification results through an automated and secure workflow.
+
+The project was developed to address common challenges in Know Your Customer (KYC) processes, including lengthy verification times, human error, identity fraud, and poor user experience. By automating document validation and biometric authentication, SafeBankID provides a scalable solution that improves both security and efficiency.
 
 ---
 
-##  Abstract
+##  Live Demo
 
-SafeBankID is a multimodal identity verification framework designed to enhance security in digital banking and fintech environments. As financial services transition to digital-first onboarding, they face increasing risks from identity theft and presentation attacks.
+**Frontend:** https://safe-bank-id.vercel.app/
 
-This project proposes a unified pipeline that integrates:
-- **Tesseract OCR** for automated document parsing  
-- **DeepFace** for biometric matching  
-- **OpenCV-based liveness detection** to ensure the physical presence of the user  
 
-By aggregating confidence scores from these three modules, SafeBankID provides a robust, real-time verification verdict, effectively bridging the gap between user convenience and high-level security in modern digital systems.
+---
+
+##  Project Overview
+
+Traditional identity verification often requires manual document inspection and face matching, making the process slow, expensive, and vulnerable to fraud.
+
+SafeBankID automates this workflow through OCR, facial recognition, and liveness detection.
+
+---
+
+#  System Architecture
+
+
+
+![System Architecture](docs/architecture2.png)
+
+---
+
+# 🔄 Verification Workflow
+
+
+![Verification Workflow](docs/workflow.png)
+
+---
+
+##  Technical Stack
+
+### Frontend
+
+- React (Vite)
+- TailwindCSS
+
+### Backend
+
+- FastAPI
+- Python
+
+### Database
+
+- PostgreSQL
+- Supabase
+
+### AI / ML
+
+- Tesseract OCR
+- DeepFace
+- OpenCV
+
+### Deployment
+
+- Vercel
+- Hugging Face Spaces
+
+---
+
+##  Verification Process
+
+### Step 1: Identity Initialization
+
+- User enters personal information
+- Data is validated
+- Information is stored in PostgreSQL
+
+### Step 2: Document Verification
+
+- User uploads an ID document
+- OCR extracts text information
+- Face image is extracted
+- Face embedding is generated and stored
+
+### Step 3: Biometric Verification
+
+- User performs webcam verification
+- OpenCV performs liveness detection
+- DeepFace generates live embedding
+- Live embedding is compared against ID embedding
+
+### Step 4: Result
+
+- Verification Approved / Rejected
+- Confidence Score Generated
+- Liveness Score Generated
+
+---
+
+##  Database Schema
+
+### users
+
+| Column | Type |
+|----------|----------|
+| id | int4 |
+| name | text |
+| dob | date |
+| id_number | varchar |
+
+### biometric_verification
+
+| Column | Type |
+|----------|----------|
+| user_id | int4 |
+| confidence_score | float |
+| liveness_score | float |
+| verified_at | timestamp |
 
 ---
 
 ##  Key Features
 
-###  Face Recognition
-- Compares live selfies with stored reference images using **DeepFace**.
-
-###  Liveness Detection
-- Confirms real user presence using **OpenCV** (blinking/head movement detection).
-
-###  ID Verification (OCR)
-- Extracts text from IDs (Passport, National ID, Driver’s License) and validates it against user-provided information.
-
-###  End-to-End Verification
-- Combines multiple AI scores to automatically approve or reject users.
-
-###  Full-Stack Integration
-Built with:
-- Next.js (Frontend)
-- FastAPI (Backend)
-- PostgreSQL (Database)
-
-###  Dockerized & Deployable
-Ready for deployment on:
-- Vercel (Frontend)
-- Render / Fly.io (Backend)
+- OCR-based ID verification
+- Facial recognition using embeddings
+- Real-time liveness detection
+- Automated KYC workflow
+- Secure PostgreSQL storage
+- REST API architecture
+- Responsive React frontend
 
 ---
 
-##  System Architecture
-![System Architecture](docs/architecture.png)
+##  Future Improvements
 
-### Frontend (Next.js)
-- Collects user information
-- Uploads ID images
-- Captures live selfie
-
-### Backend (FastAPI)
-- Receives data
-- Orchestrates AI/ML models
-
-### ML Layer
-- Face Recognition → `confidence_score`
-- Liveness Detection → `liveness_score`
-- OCR / ID Verification → `data_mismatch_score`
-
-### Database (PostgreSQL)
-- Stores user profiles
-- Stores verification results
-- Stores session history
+- Passport verification
+- Driver's license verification
+- Advanced anti-spoofing models
+- Multi-factor authentication
+- Administrative dashboard
 
 ---
 
-##  Installation & Setup
+##  Author
 
-###  Prerequisites
-Ensure you have the following installed:
-
-- Python 3.9+
-- Node.js 16+
-- Docker & Docker Compose
-- Tesseract OCR Engine
-
----
-
-##  Backend Setup (FastAPI)
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-##  Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## Docker Setup
-```
-docker-compose up --build
-```
-## Example API Response
-```
-{
-  "verification_status": true,
-  "confidence_score": 0.94,
-  "liveness_score": 0.88,
-  "data_mismatch_score": 0.95,
-  "message": "Face and ID verified successfully"
-}
-```
- #  Database Schema (PostgreSQL)
-
-## `users`
-- id
-- name
-- dob
-- email
-- phone
-
-## `biometric_verification`
-- user_id
-- confidence_score
-- liveness_score
-
-## `ai_verification`
-- user_id
-- data_mismatch_score
-- final_status
-
-## Future Improvements
- - Multi-language ID support
- - Fraud alert notifications for admins
- - Advanced deepfake detection
- - Mobile application version
- 
+**Bezawit Assefa**
