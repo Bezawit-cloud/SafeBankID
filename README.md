@@ -4,11 +4,12 @@
 
 
 
-SafeBankID is a full-stack AI-powered identity verification platform designed to automate and secure digital customer onboarding. The system combines Optical Character Recognition (OCR), facial recognition, and liveness detection to verify user identities while reducing fraud and manual verification efforts.
+> **Automate KYC. Detect fraud. Verify identities in seconds.**
 
-Built using React, FastAPI, PostgreSQL, DeepFace, and OpenCV, SafeBankID demonstrates how modern Artificial Intelligence and Computer Vision technologies can be integrated into real-world financial technology applications. The platform enables users to submit identification documents, complete biometric verification, and receive instant verification results through an automated and secure workflow.
+SafeBankID is a full-stack AI identity verification platform that automates customer onboarding using **OCR, facial recognition, and real-time liveness detection**.
 
-The project was developed to address common challenges in Know Your Customer (KYC) processes, including lengthy verification times, human error, identity fraud, and poor user experience. By automating document validation and biometric authentication, SafeBankID provides a scalable solution that improves both security and efficiency.
+It replaces slow, manual KYC processes with a **fast, scalable, and fraud-resistant AI system** for fintech, banking, and digital platforms.
+
 
 ---
 
@@ -102,6 +103,84 @@ SafeBankID automates this workflow through OCR, facial recognition, and liveness
 
 ---
 
+
+---
+## 📡 API Documentation
+
+### Base URL
+
+### 🔹 1. Create User
+
+**POST** `/users/create`
+
+Creates a new user in the system.
+
+#### Request Body
+```json
+{
+  "name": "John Doe",
+  "dob": "2000-01-01",
+  "id_number": "A1234567"
+}
+```
+#### Response
+```
+{
+  "user_id": 1,
+  "message": "User created successfully"
+}
+```
+### 🔹 2. Upload ID Document
+
+POST /verify/document
+
+Processes ID document using OCR and extracts identity data.
+
+Request (multipart/form-data)
+file: ID image
+user_id: integer
+#### Response
+```
+{
+  "extracted_name": "John Doe",
+  "extracted_id": "A1234567",
+  "face_embedding_status": "generated"
+}
+```
+### 🔹 3. Face Verification (Live)
+
+POST /verify/face
+
+Compares live face with stored ID embedding.
+
+Request Body
+```
+{
+  "user_id": 1,
+  "live_image": "base64_string"
+}
+```
+Response
+```
+{
+  "confidence_score": 0.92,
+  "liveness_score": 0.88,
+  "status": "VERIFIED"
+}
+```
+### 🔹 4. Get Verification Status
+
+GET /users/{user_id}/status
+
+Response
+```
+{
+  "user_id": 1,
+  "verified": true,
+  "confidence_score": 0.92,
+  "liveness_score": 0.88
+}
+```
 ##  Database Schema
 
 ### users
